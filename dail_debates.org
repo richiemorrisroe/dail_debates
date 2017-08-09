@@ -1,0 +1,137 @@
+
+
+- The goal is to examine dail debates, and map them to facts
+- Facts will be defined as things from the CSO
+- This is (loosely) insprired by FullFact, a UK initiative
+- But this will be the lazy, automated version
+** Dail Data
+
+- The transcript of all the debates is available online
+- It appears to go back to 1919, which is pretty impressive
+- I started with the code below
+
+#+BEGIN_SRC python
+from lxml import html
+import requests as r
+page = r.get("http://oireachtasdebates.oireachtas.ie/debates%20authoring/debateswebpack.nsf/takes/dail2017011700003?opendocument#A00100")
+#+END_SRC
+
+- But then I noticed that there's a common string, that webpack.nsf stuff
+- So I went to [[http://oireachtasdebates.oireachtas.ie/debates%2520authoring/debateswebpack.nsf/takes/][this url]], and found gloriousness
+- At least for my purposes
+- It's a simple table filled with links
+- There's some buttons to paginate at the top
+- I should try faking those in case there's a pattern
+- 
+
+#+BEGIN_SRC python
+from bs4 import BeautifulSoup
+dail = "http://oireachtasdebates.oireachtas.ie/debates%20authoring/debateswebpack.nsf/takes?OpenView&Start=1"
+dail2 = "http://oireachtasdebates.oireachtas.ie/debates%20authoring/debateswebpack.nsf/takes/dail2017011800001?opendocument"
+base = r.get(dail)
+
+soup = BeautifulSoup(base.content, 'lxml')
+tables = soup.find_all('table')
+#dirtyhack
+links = tables[1].find_all('a')
+
+
+#+END_SRC
+
+
+- So I probably need some regular expressions. 
+
+#+BEGIN_SRC python
+href = soup.find_all(["a", 'href'])
+#+END_SRC
+
+- The code above gets all of the links
+- I can just convert to a list
+- This will then allow me to iterate more easily, and use re
+
+#+BEGIN_SRC python
+#i feel weird importing regular expressions
+import re
+href_str = list(href)
+debate_urls = []
+debate_names = []
+for each in href_str:
+    res = re.search(r'(debates.*OpenDocument).*(dail[0-9]+)', str(each))
+    if res:
+        debate_urls.append(res.group(1))
+        debate_names.append(res.group(2))
+    else:
+        pass
+    
+
+
+
+#+END_SRC
+
+- Hmmm, interesting style discovery
+- Listcomps are awesome, see below
+
+#+BEGIN_SRC python
+relurls = [re.search(r'(".*").*dail[0-9]+', str(x)) for x in href_str]
+relnames = [re.search(r'dail[0-9]+', str(x)) for x in href_str]
+urls_names = zip(relurl, relnames)
+#+END_SRC
+
+- But it's hard to put them back together
+- The first code above (the for loop) was actually much easier to write and get working
+- Avoiding Nones in one's results appears to be good practice
+- So now, following all of that, I can take the urls I've extracted and see if I can collect all of the results in a list.
+- The difficulty is what to do when I get to text.
+- I need to decide how to organise and store it
+- I can probably just split by year at first, and keep all the information in the names so I can re-arrange
+
+
+
+#+BEGIN_SRC python
+import os
+results =[]
+for url in debate_urls:
+    path = os.path.join(dail, str.lower(url))
+    res = r.get(path)
+    results.append(res)
+#+END_SRC
+
+
+
+- Bugger, that easier link doesn't work properly.
+- However, if I use dail2 above, I can get the actual response. 
+
+#+BEGIN_SRC python
+testlink = r.get( "http://oireachtasdebates.oireachtas.ie/debates%20authoring/debateswebpack.nsf/takes/dail2017011800001?opendocument")
+base_debates = "http://oireachtasdebates.oireachtas.ie/debates%20authoring/debateswebpack.nsf/takes/dail2017011800001?opendocument"
+testsoup = BeautifulSoup(testlink.content)
+para = testsoup.find_all('p', {'class' : 'tocsubitem'})
+#+END_SRC
+
+- So this works
+- If I grab all of the paragraphs (note the syntax for classes, presumably consistent with other attributes)
+- I then have links to each individual question
+- I'm a little unsure if the entire text is already there
+
+#+BEGIN_SRC python
+base_debates = "http://oireachtasdebates.oireachtas.ie/debates%20authoring/debateswebpack.nsf/takes/dail1919012200012?opendocument"
+#+END_SRC
+
+- That's not the base string
+- But I just grabbed one of the debate names from earlier
+- And was able to get to the correct page
+- Which is pretty nice
+- Man, this is so much easier in Python than it would be in R
+- This is presumably why I was never able to do this well (scraping)
+- It's odd, because Hadley built loads of stuff for this
+- I suppose the lack of dictionaries and the much, much, broader selection of programmers probably causes most of this
+- 
+
+
+
+
+
+
+
+
+
